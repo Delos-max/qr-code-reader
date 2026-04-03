@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f0f1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="QR Reader">
+    <meta name="description" content="Scan any QR code and reveal all its information instantly.">
+    <title>QR Code Reader</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ===== TOP NAV BAR ===== -->
+    <nav class="navbar navbar-dark sticky-top">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-qr-code-scan me-2"></i>QR Reader
+            </span>
+            <button id="themeToggle" class="btn btn-sm btn-outline-light" title="Toggle theme">
+                <i class="bi bi-moon-fill" id="themeIcon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="container-fluid px-3 py-3">
+
+        <!-- Camera / Scanner Area -->
+        <div class="card scanner-card mb-3">
+            <div class="card-body p-0">
+                <!-- The html5-qrcode library renders the camera view inside this div -->
+                <div id="qr-reader"></div>
+
+                <!-- Placeholder shown when camera is OFF -->
+                <div id="scanner-placeholder" class="text-center py-5">
+                    <i class="bi bi-qr-code-scan display-1 text-cyan"></i>
+                    <p class="mt-3 mb-0 text-muted">Tap the button below to start scanning</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scan / Stop Buttons -->
+        <div class="d-grid gap-2 mb-3">
+            <button id="btnStartScan" class="btn btn-cyan btn-lg">
+                <i class="bi bi-camera-fill me-2"></i>Start Scanning
+            </button>
+            <button id="btnStopScan" class="btn btn-outline-danger btn-lg d-none">
+                <i class="bi bi-stop-circle me-2"></i>Stop Scanning
+            </button>
+        </div>
+
+        <!-- ===== RESULTS AREA ===== -->
+        <div id="results-section" class="d-none">
+            <div class="card results-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        <strong>Scan Result</strong>
+                    </span>
+                    <span id="qr-type-badge" class="badge bg-cyan">Text</span>
+                </div>
+                <div class="card-body">
+                    <!-- QR Type Label -->
+                    <p class="text-muted small mb-1" id="qr-type-label">Type: Plain Text</p>
+
+                    <!-- Decoded Content (structured) -->
+                    <div id="qr-decoded-content" class="decoded-content mb-3">
+                        <!-- Filled dynamically by qr-parser.js -->
+                    </div>
+
+                    <!-- Raw Data (collapsible) -->
+                    <div class="accordion" id="rawDataAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed small" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#rawDataCollapse">
+                                    View Raw Data
+                                </button>
+                            </h2>
+                            <div id="rawDataCollapse" class="accordion-collapse collapse"
+                                 data-bs-parent="#rawDataAccordion">
+                                <div class="accordion-body">
+                                    <pre id="qr-raw-data" class="mb-0 raw-data-pre"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="card-footer">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button id="btnCopy" class="btn btn-sm btn-outline-light flex-fill">
+                            <i class="bi bi-clipboard me-1"></i>Copy
+                        </button>
+                        <button id="btnOpenLink" class="btn btn-sm btn-cyan flex-fill d-none">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Open Link
+                        </button>
+                        <button id="btnScanAgain" class="btn btn-sm btn-outline-light flex-fill">
+                            <i class="bi bi-arrow-repeat me-1"></i>Scan Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== FOOTER ===== -->
+        <footer class="text-center text-muted small mt-4 pb-3">
+            <p class="mb-1">QR Reader &mdash; Works on any smartphone</p>
+            <p class="mb-0">Add to Home Screen for the best experience</p>
+        </footer>
+
+    </div><!-- /container -->
+
+    <!-- ===== SCRIPTS ===== -->
+    <!-- Bootstrap JS Bundle (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- html5-qrcode Library (camera + QR decoding) -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <!-- Our App Scripts -->
+    <script src="js/qr-parser.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+</html>
