@@ -54,26 +54,18 @@
 
         // Create a new scanner instance each time
         // The library renders the camera view inside the "qr-reader" div
-        html5QrCode = new Html5Qrcode("qr-reader");
-
-        var config = {
-            fps: 10,                    // Frames per second for scanning
-            qrbox: { width: 300, height: 300 },  // Scanning box size
-            aspectRatio: 1.333            // Square camera view
-        };
-
-        html5QrCode.start(
-            { facingMode: "environment" },   // Use the rear camera
-            config,
-            onScanSuccess,                   // Callback when a QR is decoded
-            onScanFailure                    // Callback on each failed frame (we ignore this)
-        ).then(function () {
+        var codeReader = new ZXing.BrowserQRCodeReader();
+        codeReader.decodeFromVideoDevice(null, 'qr-reader', function(result, err) {
+            if (result) {
+                onScanSuccess(result.getText());
+            }
+        }).then(function() {
             isScanning = true;
-        }).catch(function (err) {
-            // Camera could not be started – show a helpful message
+        }).catch(function(err) {
             console.error("Camera error:", err);
             showCameraError(err);
         });
+        html5QrCode = codeReader;
     }
 
     /* ----------------------------------------------------------
@@ -81,16 +73,9 @@
        ---------------------------------------------------------- */
     function stopScanning() {
         if (html5QrCode && isScanning) {
-            html5QrCode.stop().then(function () {
-                html5QrCode.clear();
-                isScanning = false;
-                showIdleState();
-            }).catch(function (err) {
-                console.error("Stop error:", err);
-                // Force reset the UI even if stop had an issue
-                isScanning = false;
-                showIdleState();
-            });
+            html5QrCode.reset();
+            isScanning = false;
+            showIdleState();
         } else {
             showIdleState();
         }
