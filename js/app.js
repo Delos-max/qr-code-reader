@@ -58,8 +58,8 @@
 
         var config = {
             fps: 10,                    // Frames per second for scanning
-            qrbox: { width: 250, height: 250 },  // Scanning box size
-            aspectRatio: 1.0            // Square camera view
+            qrbox: { width: 300, height: 300 },  // Scanning box size
+            aspectRatio: 1.333            // Square camera view
         };
 
         html5QrCode.start(
