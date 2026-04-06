@@ -96,37 +96,33 @@ body {
     justify-content: center;
 }
 
+/* Scanner body needs relative positioning so the overlay canvas
+   can be absolutely positioned on top of the video */
+.scanner-body {
+    position: relative;
+    width: 100%;
+}
+
 #scanner-placeholder {
     padding: 3rem 1rem;
 }
 
-/* Style the html5-qrcode reader container */
-#qr-reader {
+/* ---------- Video element ---------- */
+#qr-video {
     width: 100%;
-    border: none !important;
-}
-
-#qr-reader video {
     border-radius: 8px;
+    display: block;
 }
 
-/* Hide the default html5-qrcode UI chrome we don't need */
-#qr-reader__dashboard {
-    padding: 8px !important;
-}
-
-#qr-reader__dashboard_section_csr button {
-    background: linear-gradient(135deg, var(--cyan), var(--cyan-dark)) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 6px !important;
-    padding: 6px 14px !important;
-    font-size: 0.85rem !important;
-}
-
-#qr-reader__dashboard_section_swaplink {
-    color: var(--cyan) !important;
-    text-decoration: underline !important;
+/* ---------- Overlay canvas (corner brackets + dimming) ---------- */
+.scanner-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    pointer-events: none; /* Clicks pass through to the video below */
 }
 
 /* ---------- Results Card ---------- */
