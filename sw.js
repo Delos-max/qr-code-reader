@@ -1,11 +1,11 @@
 /* ============================================================
    Service Worker – QR Code Reader PWA
    ============================================================
-   Cache bumped to v3 — forces all devices including iPhones
+   Cache bumped to v4 — forces all devices including iPhones
    to discard old cached files and fetch fresh copies.
    ============================================================ */
 
-var CACHE_NAME = 'qr-reader-v3';
+var CACHE_NAME = 'qr-reader-v4';
 
 var APP_SHELL = [
     'index.html',
