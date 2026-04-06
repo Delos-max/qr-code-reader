@@ -33,8 +33,14 @@
        Scanner Setup
        ---------------------------------------------------------- */
 
-    // This variable holds the html5-qrcode scanner instance
-    var html5QrCode = null;
+    // Holds the ZXing reader instance
+    var codeReader = null;
+
+    // Holds the active MediaStream so we can stop the camera tracks properly
+    var activeStream = null;
+
+    // Prevent firing onScanSuccess more than once per scan session
+    var scanHandled = false;
 
     // Keep track of whether the scanner is running
     var isScanning = false;
@@ -46,39 +52,80 @@
        Start Scanning
        ---------------------------------------------------------- */
     function startScanning() {
+        // Reset the "already handled" guard
+        scanHandled = false;
+
         // Hide the placeholder, show the stop button
         placeholder.classList.add('d-none');
         btnStart.classList.add('d-none');
         btnStop.classList.remove('d-none');
         resultsSection.classList.add('d-none');
 
-        // Create a new scanner instance each time
-        // The library renders the camera view inside the "qr-reader" div
-        var codeReader = new ZXing.BrowserQRCodeReader();
-        codeReader.decodeFromVideoDevice(null, 'qr-reader', function(result, err) {
-            if (result) {
-                onScanSuccess(result.getText());
+        // Build ZXing hints:
+        // - TRY_HARDER makes it work on dense / high-resolution QR codes
+        // - ALSO_INVERTED enables reading white-on-dark (inverted) QR codes
+        var hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.ALSO_INVERTED, true);
+
+        codeReader = new ZXing.BrowserQRCodeReader(hints);
+
+        // Ask for the rear (environment-facing) camera explicitly.
+        // This is essential for iPhone – without it Safari may pick the front camera
+        // or refuse to decode at all.
+        var videoConstraints = {
+            facingMode: { ideal: 'environment' }
+        };
+
+        codeReader.decodeFromConstraints(
+            { video: videoConstraints },
+            'qr-reader',
+            function (result, err) {
+                if (result && !scanHandled) {
+                    scanHandled = true;
+                    onScanSuccess(result.getText());
+                }
+                // Errors on every empty frame are normal – ZXing throws
+                // NotFoundException continuously; we silently ignore them.
             }
-        }).then(function() {
+        ).then(function (controls) {
+            // Save the stream controls so we can stop the camera later
+            activeStream = controls;
             isScanning = true;
-        }).catch(function(err) {
-            console.error("Camera error:", err);
+        }).catch(function (err) {
+            console.error('Camera error:', err);
             showCameraError(err);
         });
-        html5QrCode = codeReader;
     }
 
     /* ----------------------------------------------------------
-       Stop Scanning
+       Stop Scanning  (ZXing-compatible)
        ---------------------------------------------------------- */
     function stopScanning() {
-        if (html5QrCode && isScanning) {
-            html5QrCode.reset();
-            isScanning = false;
-            showIdleState();
-        } else {
-            showIdleState();
+        stopCamera();
+        showIdleState();
+    }
+
+    /** Cleanly stops the camera stream and the ZXing reader */
+    function stopCamera() {
+        // Stop via the controls object returned by decodeFromConstraints
+        if (activeStream && typeof activeStream.stop === 'function') {
+            activeStream.stop();
         }
+        // Also call reset() on the reader itself as a belt-and-braces measure
+        if (codeReader && typeof codeReader.reset === 'function') {
+            codeReader.reset();
+        }
+        // Belt-and-braces: directly stop any live video tracks
+        var videoEl = document.getElementById('qr-reader');
+        if (videoEl && videoEl.srcObject) {
+            videoEl.srcObject.getTracks().forEach(function (track) {
+                track.stop();
+            });
+            videoEl.srcObject = null;
+        }
+        activeStream = null;
+        isScanning = false;
     }
 
     /** Reset UI to the idle / not-scanning state */
@@ -93,32 +140,20 @@
        ---------------------------------------------------------- */
 
     /** Called when a QR code is successfully decoded */
-    function onScanSuccess(decodedText /*, decodedResult */) {
+    function onScanSuccess(decodedText) {
         // Vibrate briefly if the phone supports it (nice tactile feedback)
         if (navigator.vibrate) {
             navigator.vibrate(100);
         }
 
-        // Stop the scanner so the camera turns off
-        if (html5QrCode && isScanning) {
-            html5QrCode.stop().then(function () {
-                html5QrCode.clear();
-                isScanning = false;
-            }).catch(function () {
-                isScanning = false;
-            });
-        }
+        // Stop the camera
+        stopCamera();
 
         // Parse the raw QR text
         lastResult = QRParser.parse(decodedText);
 
         // Display the results
         displayResult(lastResult, decodedText);
-    }
-
-    /** Called on every frame that does NOT contain a QR code – we simply ignore it */
-    function onScanFailure(/* errorMessage */) {
-        // No action needed – the library keeps trying
     }
 
     /* ----------------------------------------------------------
@@ -185,6 +220,8 @@
             msg = 'No camera was found on this device.';
         } else if (errStr.indexOf('NotReadableError') !== -1) {
             msg = 'Camera is in use by another app. Please close other camera apps and try again.';
+        } else if (errStr.indexOf('OverconstrainedError') !== -1) {
+            msg = 'Could not find a rear camera. Please try again.';
         }
 
         // Show error in the placeholder area
@@ -244,7 +281,6 @@
        Theme Toggle (Dark / Light)
        ---------------------------------------------------------- */
     function initTheme() {
-        // Check if user previously chose a theme
         var saved = localStorage.getItem('qr-reader-theme');
         if (saved === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
