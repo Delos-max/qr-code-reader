@@ -5,7 +5,15 @@
    ourselves via getUserMedia, draw each frame to a hidden
    canvas, and attempt to decode both the normal frame AND
    a colour-inverted copy — this is how we read white-on-dark
-   (inverted) QR codes that ZXing could not handle in-browser.
+   (inverted) QR codes.
+
+   QUIET ZONE FIX: Before passing each frame to jsQR, we draw
+   a white padding border around the entire image. This
+   compensates for QR codes that have been printed or placed
+   without the mandatory quiet zone (blank border). Without
+   this fix, jsQR cannot locate the finder pattern corners and
+   fails to decode — even though Apple's camera succeeds because
+   it uses machine learning to reconstruct missing quiet zones.
    ============================================================ */
 
 (function () {
@@ -38,6 +46,11 @@
     var animFrame    = null;
     var isScanning   = false;
     var lastResult   = null;
+
+    /* ----------------------------------------------------------
+       Quiet Zone Padding (pixels added to each side of the frame)
+       ---------------------------------------------------------- */
+    var QUIET_ZONE = 40;
 
     /* ----------------------------------------------------------
        Start Scanning
@@ -79,36 +92,43 @@
     function scanFrame() {
         if (!isScanning) return;
 
-        // Only process once the video has actual pixel data
         if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
-            var canvas = canvasEl;
-            var ctx    = canvas.getContext('2d');
+            var ctx = canvasEl.getContext('2d');
 
-            canvas.width  = videoEl.videoWidth;
-            canvas.height = videoEl.videoHeight;
+            var vidW = videoEl.videoWidth;
+            var vidH = videoEl.videoHeight;
 
-            // Draw the current video frame to the hidden canvas
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            // Make the canvas larger than the video by QUIET_ZONE on each side.
+            // This is the quiet zone fix — we draw the video frame inset inside
+            // a white-filled canvas, so every QR code effectively gains a white
+            // border even if the original print has none.
+            canvasEl.width  = vidW + (QUIET_ZONE * 2);
+            canvasEl.height = vidH + (QUIET_ZONE * 2);
+
+            // Fill the entire canvas white (this becomes the quiet zone border)
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+
+            // Draw the video frame inset by QUIET_ZONE on all sides
+            ctx.drawImage(videoEl, QUIET_ZONE, QUIET_ZONE, vidW, vidH);
 
             // Draw the scanning overlay brackets
             drawOverlay();
 
-            // Get the raw pixel data
-            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            // Get pixel data from the padded canvas
+            var imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
 
-            // 'attemptBoth' tells jsQR to try normal AND inverted in one call.
-            // This is what makes white-on-dark (inverted) QR codes work.
+            // Decode — 'attemptBoth' handles normal AND inverted QR codes
             var code = jsQR(imageData.data, imageData.width, imageData.height, {
                 inversionAttempts: 'attemptBoth'
             });
 
             if (code && code.data) {
                 onScanSuccess(code.data);
-                return; // Stop the loop — we found it
+                return;
             }
         }
 
-        // No code found yet — request the next frame
         animFrame = requestAnimationFrame(scanFrame);
     }
 
@@ -124,24 +144,23 @@
         var w = ov.width;
         var h = ov.height;
 
-        // Size of the target box — 65% of the smaller dimension
         var boxSize = Math.min(w, h) * 0.65;
         var left    = (w - boxSize) / 2;
         var top     = (h - boxSize) / 2;
         var right   = left + boxSize;
         var bottom  = top  + boxSize;
-        var corner  = boxSize * 0.12; // Length of each corner bracket arm
+        var corner  = boxSize * 0.12;
 
         ctx.clearRect(0, 0, w, h);
 
-        // Dim the area outside the target box
+        // Dim area outside the target box
         ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fillRect(0, 0, w, h);
 
-        // Cut a clear window in the centre
+        // Clear window in the centre
         ctx.clearRect(left, top, boxSize, boxSize);
 
-        // Draw cyan corner brackets
+        // Cyan corner brackets
         ctx.strokeStyle = '#00d2ff';
         ctx.lineWidth   = 3;
         ctx.lineCap     = 'round';
