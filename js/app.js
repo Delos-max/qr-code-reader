@@ -2,18 +2,18 @@
    QR Code Reader – Main Application Logic
    ============================================================
    Uses jsQR for decoding. We control the camera stream
-   ourselves via getUserMedia, draw each frame to a hidden
-   canvas, and attempt to decode both the normal frame AND
-   a colour-inverted copy — this is how we read white-on-dark
-   (inverted) QR codes.
+   ourselves via getUserMedia and process every frame twice:
 
-   QUIET ZONE FIX: Before passing each frame to jsQR, we draw
-   a white padding border around the entire image. This
-   compensates for QR codes that have been printed or placed
-   without the mandatory quiet zone (blank border). Without
-   this fix, jsQR cannot locate the finder pattern corners and
-   fails to decode — even though Apple's camera succeeds because
-   it uses machine learning to reconstruct missing quiet zones.
+   PASS 1 — Normal frame + white quiet zone padding
+             Decodes standard black-on-white QR codes.
+
+   PASS 2 — Pixel-inverted frame + white quiet zone padding
+             We manually flip every pixel (255 - value) before
+             passing to jsQR. This reliably decodes white-on-dark
+             (inverted) QR codes such as those printed in the
+             Olivier Awards brochure. This is more reliable than
+             jsQR's built-in 'attemptBoth' flag which can miss
+             inverted codes under real camera lighting conditions.
    ============================================================ */
 
 (function () {
@@ -47,9 +47,8 @@
     var isScanning   = false;
     var lastResult   = null;
 
-    /* ----------------------------------------------------------
-       Quiet Zone Padding (pixels added to each side of the frame)
-       ---------------------------------------------------------- */
+    // White border added around every frame before decoding.
+    // Compensates for QR codes printed without a quiet zone.
     var QUIET_ZONE = 40;
 
     /* ----------------------------------------------------------
@@ -63,7 +62,6 @@
         videoEl.classList.remove('d-none');
         overlayEl.classList.remove('d-none');
 
-        // Request rear camera — essential for iPhone
         var constraints = {
             video: {
                 facingMode: { ideal: 'environment' },
@@ -76,7 +74,7 @@
             .then(function (stream) {
                 activeStream = stream;
                 videoEl.srcObject = stream;
-                videoEl.setAttribute('playsinline', true); // Required for iOS Safari
+                videoEl.setAttribute('playsinline', true);
                 videoEl.play();
                 isScanning = true;
                 requestAnimationFrame(scanFrame);
@@ -87,44 +85,71 @@
     }
 
     /* ----------------------------------------------------------
-       Scan Loop — runs on every animation frame
+       Scan Loop
        ---------------------------------------------------------- */
     function scanFrame() {
         if (!isScanning) return;
 
         if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
-            var ctx = canvasEl.getContext('2d');
+            var ctx   = canvasEl.getContext('2d');
+            var vidW  = videoEl.videoWidth;
+            var vidH  = videoEl.videoHeight;
+            var padW  = vidW + (QUIET_ZONE * 2);
+            var padH  = vidH + (QUIET_ZONE * 2);
 
-            var vidW = videoEl.videoWidth;
-            var vidH = videoEl.videoHeight;
+            canvasEl.width  = padW;
+            canvasEl.height = padH;
 
-            // Make the canvas larger than the video by QUIET_ZONE on each side.
-            // This is the quiet zone fix — we draw the video frame inset inside
-            // a white-filled canvas, so every QR code effectively gains a white
-            // border even if the original print has none.
-            canvasEl.width  = vidW + (QUIET_ZONE * 2);
-            canvasEl.height = vidH + (QUIET_ZONE * 2);
-
-            // Fill the entire canvas white (this becomes the quiet zone border)
+            // Fill white — this is the quiet zone border
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+            ctx.fillRect(0, 0, padW, padH);
 
-            // Draw the video frame inset by QUIET_ZONE on all sides
+            // Draw video frame inset inside the white border
             ctx.drawImage(videoEl, QUIET_ZONE, QUIET_ZONE, vidW, vidH);
 
-            // Draw the scanning overlay brackets
+            // Draw scanning overlay
             drawOverlay();
 
-            // Get pixel data from the padded canvas
-            var imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
+            // Get pixel data
+            var imageData = ctx.getImageData(0, 0, padW, padH);
 
-            // Decode — 'attemptBoth' handles normal AND inverted QR codes
+            /* --------------------------------------------------
+               PASS 1: Try to decode the frame as-is
+               Handles normal black-on-white QR codes
+               -------------------------------------------------- */
             var code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'attemptBoth'
+                inversionAttempts: 'dontInvert'
             });
 
             if (code && code.data) {
                 onScanSuccess(code.data);
+                return;
+            }
+
+            /* --------------------------------------------------
+               PASS 2: Manually invert every pixel, then decode
+               Handles white-on-dark (inverted) QR codes.
+               We flip each R, G, B value: newValue = 255 - oldValue
+               The alpha channel (every 4th byte) is left at 255.
+               -------------------------------------------------- */
+            var data    = imageData.data;
+            var invData = new Uint8ClampedArray(data.length);
+
+            for (var i = 0; i < data.length; i += 4) {
+                invData[i]     = 255 - data[i];     // Red
+                invData[i + 1] = 255 - data[i + 1]; // Green
+                invData[i + 2] = 255 - data[i + 2]; // Blue
+                invData[i + 3] = 255;                // Alpha — keep fully opaque
+            }
+
+            var invImageData = new ImageData(invData, padW, padH);
+
+            var codeInv = jsQR(invImageData.data, invImageData.width, invImageData.height, {
+                inversionAttempts: 'dontInvert'
+            });
+
+            if (codeInv && codeInv.data) {
+                onScanSuccess(codeInv.data);
                 return;
             }
         }
@@ -141,9 +166,8 @@
         ov.width  = ov.offsetWidth;
         ov.height = ov.offsetHeight;
 
-        var w = ov.width;
-        var h = ov.height;
-
+        var w      = ov.width;
+        var h      = ov.height;
         var boxSize = Math.min(w, h) * 0.65;
         var left    = (w - boxSize) / 2;
         var top     = (h - boxSize) / 2;
@@ -153,35 +177,27 @@
 
         ctx.clearRect(0, 0, w, h);
 
-        // Dim area outside the target box
         ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fillRect(0, 0, w, h);
-
-        // Clear window in the centre
         ctx.clearRect(left, top, boxSize, boxSize);
 
-        // Cyan corner brackets
         ctx.strokeStyle = '#00d2ff';
         ctx.lineWidth   = 3;
         ctx.lineCap     = 'round';
         ctx.beginPath();
 
-        // Top-left
         ctx.moveTo(left, top + corner);
         ctx.lineTo(left, top);
         ctx.lineTo(left + corner, top);
 
-        // Top-right
         ctx.moveTo(right - corner, top);
         ctx.lineTo(right, top);
         ctx.lineTo(right, top + corner);
 
-        // Bottom-right
         ctx.moveTo(right, bottom - corner);
         ctx.lineTo(right, bottom);
         ctx.lineTo(right - corner, bottom);
 
-        // Bottom-left
         ctx.moveTo(left + corner, bottom);
         ctx.lineTo(left, bottom);
         ctx.lineTo(left, bottom - corner);
@@ -230,9 +246,7 @@
         if (navigator.vibrate) {
             navigator.vibrate(100);
         }
-
         stopCamera();
-
         lastResult = QRParser.parse(decodedText);
         displayResult(lastResult, decodedText);
     }
@@ -258,7 +272,6 @@
             html += '</div>';
         }
         decodedContent.innerHTML = html;
-
         rawDataPre.textContent = rawText;
 
         if (result.linkUrl) {
