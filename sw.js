@@ -1,14 +1,12 @@
 /* ============================================================
    Service Worker – QR Code Reader PWA
    ============================================================
-   Cache version bumped to v2 to force all devices (including
-   iPhones) to discard any previously cached files and fetch
-   fresh copies from the server.
+   Cache bumped to v3 — forces all devices including iPhones
+   to discard old cached files and fetch fresh copies.
    ============================================================ */
 
-var CACHE_NAME = 'qr-reader-v2';
+var CACHE_NAME = 'qr-reader-v3';
 
-// List of files that make up the "app shell"
 var APP_SHELL = [
     'index.html',
     'css/style.css',
@@ -26,7 +24,6 @@ self.addEventListener('install', function (event) {
             return cache.addAll(APP_SHELL);
         })
     );
-    // Activate immediately without waiting for old SW to stop
     self.skipWaiting();
 });
 
@@ -43,7 +40,6 @@ self.addEventListener('activate', function (event) {
             );
         })
     );
-    // Take control of all clients immediately
     self.clients.claim();
 });
 
@@ -58,7 +54,6 @@ self.addEventListener('fetch', function (event) {
                 return networkResponse;
             });
         }).catch(function () {
-            // If both cache and network fail, return the cached index page
             if (event.request.mode === 'navigate') {
                 return caches.match('index.html');
             }
