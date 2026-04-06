@@ -1,12 +1,12 @@
 /* ============================================================
    Service Worker – QR Code Reader PWA
    ============================================================
-   Provides:
-   - Offline caching of the app shell (HTML, CSS, JS, icons)
-   - Cache-first strategy for assets, network-first for pages
+   Cache version bumped to v2 to force all devices (including
+   iPhones) to discard any previously cached files and fetch
+   fresh copies from the server.
    ============================================================ */
 
-var CACHE_NAME = 'qr-reader-v1';
+var CACHE_NAME = 'qr-reader-v2';
 
 // List of files that make up the "app shell"
 var APP_SHELL = [
@@ -55,7 +55,6 @@ self.addEventListener('fetch', function (event) {
                 return cachedResponse;
             }
             return fetch(event.request).then(function (networkResponse) {
-                // Optionally cache new resources as they're fetched
                 return networkResponse;
             });
         }).catch(function () {
