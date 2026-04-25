@@ -106,7 +106,8 @@
     function scanFrame() {
         if (!isScanning) return;
 
-        if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
+        if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA &&
+            videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
             var ctx  = canvasEl.getContext('2d');
             var vidW = videoEl.videoWidth;
             var vidH = videoEl.videoHeight;
